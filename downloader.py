@@ -25,12 +25,12 @@ def generate_chart(data: Optional[List[Dict[str, Any]]] = None, output_file: str
     if data is None:
         data = get_data(filepath)
 
-    if not data:
+    if not data or not data[0]:
         # Create an empty or placeholder chart if no data is available
         fig, ax = plt.subplots(figsize=(8, 4))
         ax.text(0.5, 0.5, "No Data Available", horizontalalignment='center', verticalalignment='center', transform=ax.transAxes)
-        plt.title("Ticker Data Chart")
-        plt.savefig(output_file)
+        ax.set_title("Ticker Data Chart")
+        fig.savefig(output_file)
         plt.close(fig)
         return output_file
 
@@ -42,18 +42,18 @@ def generate_chart(data: Optional[List[Dict[str, Any]]] = None, output_file: str
     x_key = next((k for k in x_keys if k in data[0]), list(data[0].keys())[0])
     y_key = next((k for k in y_keys if k in data[0]), list(data[0].keys())[1] if len(data[0].keys()) > 1 else list(data[0].keys())[0])
 
-    x_vals = [item[x_key] for item in data]
-    y_vals = [item[y_key] for item in data]
+    x_vals = [item.get(x_key) for item in data]
+    y_vals = [item.get(y_key) for item in data]
 
     fig, ax = plt.subplots(figsize=(8, 4))
     ax.plot(x_vals, y_vals, marker='o', linestyle='-', color='b', label=y_key.capitalize())
     ax.set_xlabel(x_key.capitalize())
     ax.set_ylabel(y_key.capitalize())
     ax.set_title(f"Ticker Chart ({y_key.capitalize()} over {x_key.capitalize()})")
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-    plt.legend()
-    plt.savefig(output_file)
+    ax.tick_params(axis='x', labelrotation=45)
+    fig.tight_layout()
+    ax.legend()
+    fig.savefig(output_file)
     plt.close(fig)
 
     return output_file
