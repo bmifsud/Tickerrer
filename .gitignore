@@ -1,5 +1,11 @@
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.egg-info/
+.coverage
+.pytest_cache/
+build/
+dist/
+data/
 stored_data.json
 chart.png
-.pytest_cache/
