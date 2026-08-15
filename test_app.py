@@ -1,44 +1,53 @@
 import pytest
 from fastapi.testclient import TestClient
-import os
-import downloader
-from main import app
+import shutil
+from pathlib import Path
+import pandas as pd
+
+from main import app, DATA_DIR
+from tickerrer.symbols import resolve_symbol
+from tickerrer.storage import save_ticker_data
 
 client = TestClient(app)
 
 def setup_function():
-    # Reset stored_data.json and chart.png before tests
-    if os.path.exists(downloader.DATA_FILE):
-        os.remove(downloader.DATA_FILE)
-    if os.path.exists("chart.png"):
-        os.remove("chart.png")
+    # Clear test data directory before tests
+    if DATA_DIR.exists():
+        shutil.rmtree(DATA_DIR)
 
-def test_get_empty_data():
-    response = client.get("/api/data")
+def test_get_data_404_when_missing():
+    response = client.get("/api/data?symbol=nonexistent")
+    assert response.status_code == 404
+
+def test_fetch_and_get_data_flow():
+    # Pre-populate sample data
+    sym_info = resolve_symbol("aapl")
+    dates = pd.date_range("2026-01-01", "2026-01-02", freq="D")
+    df = pd.DataFrame(
+        {"Open": [100.0, 101.0], "High": [105.0, 106.0], "Low": [95.0, 96.0], "Close": [102.0, 103.0], "Volume": [1000, 1100]},
+        index=dates
+    )
+    save_ticker_data({"1d": df}, sym_info, output_dir=DATA_DIR, file_format="csv")
+
+    response = client.get("/api/data?symbol=aapl&interval=1d")
     assert response.status_code == 200
-    assert response.json() == []
+    data = response.json()
+    assert len(data) == 2
+    assert data[0]["Close"] == 102.0
 
-def test_post_and_get_data():
-    sample_data = [
-        {"date": "2026-01-01", "price": 100},
-        {"date": "2026-01-02", "price": 105}
-    ]
-    post_resp = client.post("/api/data", json=sample_data)
-    assert post_resp.status_code == 200
-    assert post_resp.json() == {"message": "Data saved successfully"}
+def test_chart_data_endpoint():
+    sym_info = resolve_symbol("aapl")
+    dates = pd.date_range("2026-01-01", "2026-01-02", freq="D")
+    df = pd.DataFrame(
+        {"Open": [100.0, 101.0], "High": [105.0, 106.0], "Low": [95.0, 96.0], "Close": [102.0, 103.0], "Volume": [1000, 1100]},
+        index=dates
+    )
+    save_ticker_data({"1d": df}, sym_info, output_dir=DATA_DIR, file_format="csv")
 
-    get_resp = client.get("/api/data")
-    assert get_resp.status_code == 200
-    assert get_resp.json() == sample_data
-
-def test_get_chart_endpoint():
-    sample_data = [
-        {"date": "2026-01-01", "price": 100},
-        {"date": "2026-01-02", "price": 105}
-    ]
-    client.post("/api/data", json=sample_data)
-
-    chart_resp = client.get("/api/chart")
-    assert chart_resp.status_code == 200
-    assert chart_resp.headers["content-type"] == "image/png"
-    assert len(chart_resp.content) > 0
+    response = client.get("/api/chart?symbol=aapl&interval=1d")
+    assert response.status_code == 200
+    chart_json = response.json()
+    assert chart_json["symbol"] == "aapl"
+    assert "labels" in chart_json
+    assert "series" in chart_json
+    assert chart_json["series"]["Close"] == [102.0, 103.0]
